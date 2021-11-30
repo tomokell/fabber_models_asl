@@ -181,6 +181,13 @@ double AIFModel_gammadisp::kcblood(const double ti, const double deltblood, cons
 
     double k = 1 + p * s;
 
+    double sprime; // Sharpness parameter modified to include T1 decay effects
+
+    if (casl)
+    {
+        sprime = s + 1/T_1b;
+    }
+
     if (ti < deltblood)
     {
         kcblood = 0.0;
@@ -188,22 +195,31 @@ double AIFModel_gammadisp::kcblood(const double ti, const double deltblood, cons
     else if (ti >= deltblood && ti <= (deltblood + taub))
     {
         if (casl)
-            kcblood = 2 * exp(-deltblood / T_1b);
-        else
+        {
+            kcblood = 2 * exp(-deltblood / T_1b) * pow(s/sprime,k); // Original T1 decay term modulated by additional dispersion term
+            kcblood *= (1 - igamc(k, sprime * (ti - deltblood))); // Modified incomplete gamma function call to account for dispersion-T1 interaction
+        }
+        else // PASL
+        {
             kcblood = 2 * exp(-ti / T_1b);
-
-        // This part is specific to the gamma dispersion model
-        kcblood *= (1 - igamc(k, s * (ti - deltblood)));
+            // This part is specific to the gamma dispersion model
+            kcblood *= (1 - igamc(k, s * (ti - deltblood)));
+        }
+        
     }
     else //(ti > deltblood + taub)
     {
         if (casl)
-            kcblood = 2 * exp(-deltblood / T_1b);
-        else
+        {
+            kcblood = 2 * exp(-deltblood / T_1b) * pow(s/sprime,k); // Original T1 decay term modulated by additional dispersion term
+            kcblood *= (igamc(k, sprime * (ti - deltblood - taub)) - igamc(k, sprime * (ti - deltblood))); // Modified incomplete gamma function call to account for dispersion-T1 interaction
+        }
+        else // PASL
+        {
             kcblood = 2 * exp(-ti / T_1b);
-
-        // This part is specific to the gamma dispersion model
-        kcblood *= (igamc(k, s * (ti - deltblood - taub)) - igamc(k, s * (ti - deltblood)));
+            // This part is specific to the gamma dispersion model
+            kcblood *= (igamc(k, s * (ti - deltblood - taub)) - igamc(k, s * (ti - deltblood)));    
+        }        
     }
 
     return kcblood;

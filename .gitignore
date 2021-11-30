@@ -10,3 +10,4 @@ fabber_asl
 build
 *.nii
 html
+.vscode
