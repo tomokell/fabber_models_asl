@@ -1680,7 +1680,7 @@ void ASLFwdModel::Initialize(ArgsType &args)
         {
             tiss_model = new TissueModel_nodisp_wellmix();
         }
-        else if ((disptype == "gamma") && !casl)
+        else if ((disptype == "gamma")) // T.O. Allow gamma dispersion with the (P)CASL models now
         {
             tiss_model = new TissueModel_gammadisp_wellmix();
         }

@@ -824,7 +824,8 @@ double TissueModel_gammadisp_wellmix::kctissue(const double ti, const double fca
 {
     double kctissue = 0.0;
 
-    assert(!casl); // only pASL at the moment!
+    // T.O. Allow CASL with gamma dispersion
+    // assert(!casl); // only pASL at the moment!
 
     // extract dispersion parameters
     double s;
@@ -839,41 +840,80 @@ double TissueModel_gammadisp_wellmix::kctissue(const double ti, const double fca
 
     double k = 1 + p * s;
     double T_1app = 1 / (1 / T_1 + fcalib / lambda);
-    double A = T_1app - T_1b;
-    double B = A + s * T_1app * T_1b;
-    if (B < 1e-12)
-        B = 1e-12; // really shouldn't happen, but combination of parameters may
-                   // arise in artefactual voxels?
-    double C = pow(s - 1 / T_1app + 1 / T_1b, p * s);
-    if (s - 1 / T_1app + 1 / T_1b <= 0)
-        C = 1e-12; // really shouldn't happen, but combination of parameters may
-                   // arise in artefactual voxels?
 
-    if (ti < delttiss)
-    {
-        kctissue = 0;
+    // T.O. Use different approaches for PASL and CASL, since for CASL we need to include the
+    // variable T1 decay experienced by different parts of the dispersed bolus
+    if (casl) {
+
+        // There is a minimum value of the sharpness parameter that works for this approach, 
+        // so enforce that here so that beta (calculated below) is positive
+        if (s <= 1/T_1app - 1/T_1b)
+        {
+            s = 1/T_1app - 1/T_1b + DBL_EPSILON;
+        }
+
+        // Calculate some useful parameters
+        double sprime  = s + 1/T_1b; // Sharpness parameter modified to include T1 decay effects
+        double beta = 1 - 1/(sprime * T_1app);
+    
+        if (ti < delttiss)
+        {
+            kctissue = 0;
+        }
+        else if (ti >= delttiss && ti <= (delttiss + tau))
+        {
+            kctissue = 2 * pow(s/sprime,k) * exp(-delttiss / T_1b) * T_1app 
+                            * (1 - igamc(k, sprime * (ti - delttiss))
+                        - exp(-(ti - delttiss) / T_1app) / pow(beta, k)
+                            * (1 - igamc(k, beta * sprime * (ti - delttiss))));
+        }
+        else //(ti > delttiss + tau)
+        {
+            kctissue = 2 * pow(s/sprime,k) * exp(-delttiss / T_1b) * T_1app 
+                            * (igamc(k, sprime * (ti - delttiss - tau)) - igamc(k, sprime * (ti - delttiss))
+                        - exp(-(ti - delttiss) / T_1app) / pow(beta, k)
+                            * (1 - igamc(k, beta * sprime * (ti - delttiss)) - exp(tau/T_1app)*(1 - igamc(k, beta * sprime * (ti - delttiss - tau)))));
+        }
+
     }
-    else if (ti >= delttiss && ti <= (delttiss + tau))
+    else // PASL
     {
-        kctissue = 2 * 1 / A * exp(-(T_1app * delttiss + (T_1app + T_1b) * ti) / (T_1app * T_1b))
-            * T_1app * T_1b * pow(B, -k)
-            * (exp(delttiss / T_1app + ti / T_1b) * pow(s * T_1app * T_1b, k)
-                           * (1 - igamc(k, B / (T_1app * T_1b) * (ti - delttiss)))
-                       + exp(delttiss / T_1b + ti / T_1app) * pow(B, k)
-                           * (-1 + igamc(k, s * (ti - delttiss))));
-    }
-    else //(ti > delttiss + tau)
-    {
-        kctissue = 2 * 1 / (A * B)
-            * (exp(-A / (T_1app * T_1b) * (delttiss + tau) - ti / T_1app) * T_1app * T_1b / C
-                       * (pow(s, k) * T_1app * T_1b
-                                 * (-1
-                                       + exp((-1 / T_1app + 1 / T_1b) * tau)
-                                           * (1 - igamc(k, B / (T_1app * T_1b) * (ti - delttiss)))
-                                       + igamc(k, B / (T_1app * T_1b) * (ti - delttiss - tau)))
-                             - exp(-A / (T_1app * T_1b) * (ti - delttiss - tau)) * C * B
-                                 * (igamc(k, s * (ti - delttiss - tau))
-                                       - igamc(k, s * (ti - delttiss)))));
+        double A = T_1app - T_1b;
+        double B = A + s * T_1app * T_1b;
+        if (B < 1e-12)
+            B = 1e-12; // really shouldn't happen, but combination of parameters may
+                    // arise in artefactual voxels?
+        double C = pow(s - 1 / T_1app + 1 / T_1b, p * s);
+        if (s - 1 / T_1app + 1 / T_1b <= 0)
+            C = 1e-12; // really shouldn't happen, but combination of parameters may
+                    // arise in artefactual voxels?
+
+        if (ti < delttiss)
+        {
+            kctissue = 0;
+        }
+        else if (ti >= delttiss && ti <= (delttiss + tau))
+        {
+            kctissue = 2 * 1 / A * exp(-(T_1app * delttiss + (T_1app + T_1b) * ti) / (T_1app * T_1b))
+                * T_1app * T_1b * pow(B, -k)
+                * (exp(delttiss / T_1app + ti / T_1b) * pow(s * T_1app * T_1b, k)
+                            * (1 - igamc(k, B / (T_1app * T_1b) * (ti - delttiss)))
+                        + exp(delttiss / T_1b + ti / T_1app) * pow(B, k)
+                            * (-1 + igamc(k, s * (ti - delttiss))));
+        }
+        else //(ti > delttiss + tau)
+        {
+            kctissue = 2 * 1 / (A * B)
+                * (exp(-A / (T_1app * T_1b) * (delttiss + tau) - ti / T_1app) * T_1app * T_1b / C
+                        * (pow(s, k) * T_1app * T_1b
+                                    * (-1
+                                        + exp((-1 / T_1app + 1 / T_1b) * tau)
+                                            * (1 - igamc(k, B / (T_1app * T_1b) * (ti - delttiss)))
+                                        + igamc(k, B / (T_1app * T_1b) * (ti - delttiss - tau)))
+                                - exp(-A / (T_1app * T_1b) * (ti - delttiss - tau)) * C * B
+                                    * (igamc(k, s * (ti - delttiss - tau))
+                                        - igamc(k, s * (ti - delttiss)))));
+        }
     }
     return kctissue;
 }
