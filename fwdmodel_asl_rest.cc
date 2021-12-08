@@ -107,6 +107,7 @@ static OptionSpec OPTIONS[] = {
     { "capriafa1", OPT_FLOAT, "CAPRIA starting flip angle", OPT_NONREQ, "" }, 
     { "capriafa2", OPT_FLOAT, "CAPRIA finishing flip angle", OPT_NONREQ, "" }, 
     { "capriatr", OPT_FLOAT, "CAPRIA TR", OPT_NONREQ, "" }, 
+    { "dispsd", OPT_FLOAT, "Dispersion parameter standard deviation", OPT_NONREQ, "" }, // T.O. Add dispersion prior options
     { "" },
 };
 
@@ -291,7 +292,13 @@ void ASLFwdModel::HardcodedInitialDists(MVNDist &prior, MVNDist &posterior) cons
                 {
                     for (int i = 1; i <= ndisp; i++)
                     {
-                        precisions(disp_index() + i - 1, disp_index() + i - 1) = dispprec(i);
+                        if (dispprecset > 0)
+                        { // Prior SD set by the user, so use this
+                            LOG << "Updating tissue dispersion parameter " << i << " prior precision to " << dispprecset << endl;
+                            precisions(disp_index() + i - 1, disp_index() + i - 1) = dispprecset;
+                        } else { // No (sensible) prior SD set by the user, so use the defaults
+                            precisions(disp_index() + i - 1, disp_index() + i - 1) = dispprec(i);
+                        }
                     }
                 }
             }
@@ -313,9 +320,17 @@ void ASLFwdModel::HardcodedInitialDists(MVNDist &prior, MVNDist &posterior) cons
                 {
                     for (int i = 1; i <= ndisp; i++)
                     {
-                        precisions(disp_index() + ndisp * wmidx + i - 1,
+                        if (dispprecset > 0)
+                        { // Prior SD set by the user, so use this
+                            LOG << "Updating WM dispersion parameter " << i << " prior precision to " << dispprecset << endl;
+                            precisions(disp_index() + ndisp * wmidx + i - 1,
                             disp_index() + ndisp * wmidx + i - 1)
-                            = dispprec(i);
+                            = dispprecset;
+                        } else { // Use the defaults
+                            precisions(disp_index() + ndisp * wmidx + i - 1,
+                                disp_index() + ndisp * wmidx + i - 1)
+                                = dispprec(i);
+                        }
                     }
                 }
             }
@@ -337,9 +352,18 @@ void ASLFwdModel::HardcodedInitialDists(MVNDist &prior, MVNDist &posterior) cons
                 {
                     for (int i = 1; i <= ndisp; i++)
                     {
-                        precisions(disp_index() + ndisp * artidx + i - 1,
-                            disp_index() + ndisp * artidx + i - 1)
-                            = dispprec(i);
+
+                        if (dispprecset > 0)
+                        { // Prior SD set by the user, so use this
+                            LOG << "Updating arterial dispersion parameter " << i << " prior precision to " << dispprecset << endl;
+                            precisions(disp_index() + ndisp * artidx + i - 1,
+                                disp_index() + ndisp * artidx + i - 1)
+                                = dispprecset;
+                        } else { // No (sensible) prior SD set by the user, so use the defaults
+                            precisions(disp_index() + ndisp * artidx + i - 1,
+                                disp_index() + ndisp * artidx + i - 1)
+                                = dispprec(i);
+                        }
                     }
                 }
             }
@@ -367,7 +391,13 @@ void ASLFwdModel::HardcodedInitialDists(MVNDist &prior, MVNDist &posterior) cons
             {
                 for (int i = 1; i <= ndisp; i++)
                 {
-                    precisions(disp_index() + i - 1, disp_index() + i - 1) = dispprec(i);
+                    if (dispprecset > 0)
+                    { // Prior SD set by the user, so use this
+                        LOG << "Updating combined arterial/tissue dispersion parameter " << i << " prior precision to " << dispprecset << endl;
+                        precisions(disp_index() + i - 1, disp_index() + i - 1) = dispprecset;
+                    } else { // No (sensible) prior SD set by the user, so use the defaults
+                        precisions(disp_index() + i - 1, disp_index() + i - 1) = dispprec(i);
+                    }
                 }
             }
         }
@@ -1155,6 +1185,15 @@ void ASLFwdModel::Initialize(ArgsType &args)
     // GM only rather than mixed WM/GM)
     lambda = args.GetDoubleDefault("lambda", incwm ? 0.98 : 0.9);
     lamwm = args.GetDoubleDefault("lambdawm", 0.82);
+
+    // T.O. Add dispersion parameter prior SD
+    double dispsd = args.GetDoubleDefault("dispsd", -1.0);
+    if (dispsd == -1.0) // No (sensible) value set by user, so use defaults later
+    {
+        dispprecset = -1.0;
+    } else {
+        dispprecset = 1 / (dispsd * dispsd);
+    }
 
     //
     // Data acquisition parameters

@@ -220,6 +220,9 @@ protected:
     ColumnVector capriaR; // CAPRIA signal modulation factor (including attenuation from previous
                           // RF pulses and the sin(alpha) term
 
+    // T.O. Dispersion prior SD
+    double dispprecset;    // precision for dispersion parameters
+
     // relative indices
     int wmidx;
     int artidx;
